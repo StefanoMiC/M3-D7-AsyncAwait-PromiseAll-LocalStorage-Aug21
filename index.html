@@ -287,6 +287,123 @@
       "kanyewest",
     ];
 
+    // ### Player functionality ###
+    const audio = document.getElementsByTagName("audio")[0] // grabbing audio element
+    const playBtn = document.querySelector("img[alt='play']") // grabbing play button element
+
+    const setPlayerSong = (song) => { // gets called by the onclick onto the column of the element
+      // audio.src = song.preview
+      playBtn.src = "./playerbuttons/Pause.png" // we need to change the icon state since the song will be playing when this function runs
+
+      localStorage.setItem("songId", song.id) // setting the clicked song id into the localStorage (needed to retrieve the last chosen song upon fetching -below-)
+      setPlayerInfos(song) // this function will populate the information of the player (img, title, album, son duration etc)
+      audio.play() // triggers the audio to play (audio tag received the src from within setPlayerInfos)
+    }
+
+    const setPlayerInfos = (song) => {
+
+      // grabbing elements
+      const playerArtistInfo = document.querySelector(".playerArtistInfo")
+
+      const img = playerArtistInfo.querySelector("img")
+      const songTitle = playerArtistInfo.querySelector("h6")
+      const songAlbum = playerArtistInfo.querySelector("p")
+
+      // applying song info to the player
+      img.src = song.album.cover_small;
+      img.classList.add("img-fluid")
+      songTitle.innerText = song.title_short
+      songAlbum.innerText = song.album.title
+
+      // resets current time
+      const currTime = document.querySelector(".player .currentTime")
+      currTime.innerText = "00:00"
+
+      // adds song duration
+      const duration = document.querySelector(".player .duration")
+      const minutes = "0" + Math.floor(song.duration / 60)
+      const seconds = "0" + Math.floor(song.duration % 60)
+
+      duration.innerText = minutes.slice(-2) + ":" + seconds.slice(-2)
+
+      // that's when the audio tag receives the source and it's ready to play()
+      audio.src = song.preview
+    }
+
+    const handleChangeVolume = (event) => { // function triggered by the onchange event of the volume's range input 
+      const rangeValue = event.target.value
+      const volume = rangeValue / 100
+
+      audio.volume = volume // affetcs the audio element's volume
+
+      localStorage.setItem("prevVolume", rangeValue) // set chosen volume value in localStorage for later use
+    }
+
+    // manages the movement of the progress bar, gets called by the audio.ontimeupdate
+    const handleProgressBarUpdate = (ended) => {
+      const progressBar = document.querySelector(".progress-bar") // grabs progress bar div
+      const percentage = (audio.currentTime / audio.duration) * 100 // computes percentage value
+
+      progressBar.style.width = percentage.toString() + "%" // applies the percentace as width of the progress bar
+
+      const currTime = document.querySelector(".player .currentTime")
+
+      const minutes = "0" + Math.floor(audio.currentTime / 60)
+      const seconds = "0" + Math.floor(audio.currentTime)
+
+      currTime.innerText = minutes.slice(-2) + ":" + seconds.slice(-2) // updates current time
+    }
+
+    const handleProgressBarClick = (event) => {
+      // fired after clicking the progress-bar
+
+      const elem = event.currentTarget.firstElementChild;
+      const percentage = parseInt((event.offsetX / event.currentTarget.clientWidth) * 100);
+      // calculates where you clicked in relation to the total width of the div (clientWidth)
+
+      elem.style.width = percentage.toString() + "%"; // updates the bar with the new position
+      elem.setAttribute("aria-valuenow", percentage.toString());
+
+      audio.currentTime = (percentage / 100) * audio.duration; // moves song time depending on where the progress-bar was clicked
+    };
+
+    const handlePlay = () => {
+      if (audio.paused) { // when audio is not playing
+        playBtn.src = "./playerbuttons/Pause.png"
+        audio.play()
+      } else { // when audio is already playing
+        playBtn.src = "./playerbuttons/Play.png"
+        audio.pause()
+      }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+
+      audio.ontimeupdate = () => handleProgressBarUpdate() // triggered by the song progressing, on every second or so
+      // audio.addEventListener("timeupdate", () => handleProgressBarUpdate())
+      audio.onended = () => handleProgressBarUpdate(true); // triggered when the song ends, passing true as a parameter to reset the progress bar at the end
+
+      const progressBar = document.querySelector(".progress"); // grabs the .progress container
+      progressBar.onclick = (event) => handleProgressBarClick(event); // attaches an onclick event on the progress bar to fire handleProgressBarClick upon clicking
+
+      playBtn.onclick = () => handlePlay() // click on the play button
+
+      // input.onclick = () => 
+      // input.addEventListener("click", () => {})
+
+      const volumeRange = document.querySelector("input[type='range'") // volume input
+      volumeRange.onchange = () => handleChangeVolume() // triggers a function when changed
+      const storageVolume = localStorage.getItem("prevVolume") // gets the volume from the localStorage
+
+      if (storageVolume) { // if a previous volume is found
+        volumeRange.value = storageVolume // changes the position of the range input
+        audio.volume = storageVolume / 100 // applies the previous volume when the page loads
+      }
+
+    })
+
+    // ### End of player functionality
+
     const isLoading = (loading) => {
 
       const spinner = document.querySelector(".spinner-border")
@@ -298,7 +415,7 @@
       }
     }
 
-    const albumCard = (song) => `<div class="col text-center">
+    const albumCard = (song) => `
                     <img
                       class="img-fluid"
                       src=${song.album.cover_medium}
@@ -310,7 +427,7 @@
                       <br />
                       <a href="/artist_page.html?artistId=${song.artist.id}">${song.artist.name}</a>
                     </p>
-                  </div>`
+                  `
 
     const searchHistory = localStorage.getItem("q")
     console.log(searchHistory)
@@ -352,11 +469,29 @@
           row.innerHTML = ""
 
           songsArray.forEach(song => {
-            // console.log("SONG", song)
+            console.log("SONG", song)
 
-            row.innerHTML += albumCard(song)
+            const col = document.createElement("div")
+            col.className = "col text-center"
+            col.innerHTML = albumCard(song)
+
+            col.onclick = () => setPlayerSong(song) // every col will trigger the audio to play
+
+            row.appendChild(col)
 
           })
+
+          const storageSongId = localStorage.getItem("songId")
+          const prevSong = songsArray.find((song) => song.id === parseInt(storageSongId))
+          // getting previous song by checking the id from the localStorage of the last selected song 
+
+          if (storageSongId && prevSong) { // if there's a previous song
+            console.log(prevSong)
+            setPlayerInfos(prevSong) // use that song and pre-fill the player with that
+          } else {
+            setPlayerInfos(songsArray[0]) // otherwise use any valid song arbitrarily selected by you
+          }
+
           isLoading(false)
         })
         .catch(err => {
@@ -400,26 +535,7 @@
 
           isLoading(false)
         })
-
-
     }
-
-    const handleChangeVolume = (event) => {
-      const volume = event.target.value
-      localStorage.setItem("prevVolume", volume)
-    }
-
-    window.addEventListener("DOMContentLoaded", () => {
-
-      const volumeRange = document.querySelector("input[type='range'")
-      volumeRange.onchange = handleChangeVolume
-      const storageVolume = localStorage.getItem("prevVolume")
-
-      if (storageVolume) {
-        volumeRange.value = storageVolume
-      }
-
-    })
 
 
     window.onload = () => {
